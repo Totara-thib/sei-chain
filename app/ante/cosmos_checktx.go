@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/sei-protocol/sei-chain/app/antedecorators"
@@ -73,7 +74,7 @@ func CosmosCheckTxAnte(
 	// charge the incoming caller/block meter.
 	authParams := accountKeeper.GetParams(ctx.WithGasMeter(storetypes.NewNoConsumptionInfiniteGasMeter()))
 
-	if err := CosmosStatelessChecks(tx, ctx.BlockHeight(), ctx.ConsensusParams(), authParams); err != nil {
+	if err := CosmosStatelessChecks(tx, ctx.BlockHeight(), ctx.ConsensusParams(), authParams, pk.GetDisabledMsgTypeURLs(ctx)); err != nil {
 		return SetGasMeter(ctx, 0, pk), err
 	}
 
@@ -126,7 +127,7 @@ func HandleOutofGas(recoveredErr any, gasLimit uint64, gasConsumed uint64) error
 	}
 }
 
-func CosmosStatelessChecks(tx sdk.Tx, height int64, consensusParams *tmproto.ConsensusParams, authParams authtypes.Params) error {
+func CosmosStatelessChecks(tx sdk.Tx, height int64, consensusParams *tmproto.ConsensusParams, authParams authtypes.Params, disabledMsgTypeURLs []string) error {
 	gasTx, ok := tx.(GasTx)
 	if !ok {
 		return sdkerrors.Wrap(sdkerrors.ErrTxDecode, "Tx must be GasTx")
@@ -152,6 +153,9 @@ func CosmosStatelessChecks(tx sdk.Tx, height int64, consensusParams *tmproto.Con
 	}
 	if len(tx.GetMsgs()) == 0 {
 		return sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "must contain at least one message")
+	}
+	if err := checkMsgsEnabled(tx.GetMsgs(), disabledMsgTypeURLs); err != nil {
+		return err
 	}
 	for _, msg := range tx.GetMsgs() {
 		err := msg.ValidateBasic()
@@ -222,6 +226,17 @@ func CosmosStatelessChecks(tx sdk.Tx, height int64, consensusParams *tmproto.Con
 			}
 		default:
 			continue
+		}
+	}
+	return nil
+}
+
+// checkMsgsEnabled returns ErrMsgTypeDisabled for the first of msgs whose type URL is in
+// disabledMsgTypeURLs.
+func checkMsgsEnabled(msgs []sdk.Msg, disabledMsgTypeURLs []string) error {
+	for _, msg := range msgs {
+		if typeURL := sdk.MsgTypeURL(msg); slices.Contains(disabledMsgTypeURLs, typeURL) {
+			return sdkerrors.Wrap(sdkerrors.ErrMsgTypeDisabled, typeURL)
 		}
 	}
 	return nil
