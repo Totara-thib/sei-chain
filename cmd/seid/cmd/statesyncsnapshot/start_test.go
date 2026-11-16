@@ -57,6 +57,7 @@ func newFullnodeHome(t *testing.T) fullnodeHome {
 		BlockInterval:      utils.Duration(400 * time.Millisecond),
 		PersistentStateDir: filepath.Join("data", "autobahn"),
 		DialInterval:       utils.Duration(10 * time.Second),
+		EVMChainID:         testEVMChainID,
 	}
 	data, err := json.Marshal(fc)
 	require.NoError(t, err)

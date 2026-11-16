@@ -33,7 +33,10 @@ import (
 	tmtypes "github.com/sei-protocol/sei-chain/sei-tendermint/types"
 )
 
-const testChainID = "chain-a"
+const (
+	testChainID    = "chain-a"
+	testEVMChainID = 713700
+)
 
 var errStopped = errors.New("stopped by the test")
 
@@ -172,11 +175,15 @@ func (p *producer) commit(t *testing.T, n byte) int64 {
 	bankPairs := []*proto.KVPair{{Key: []byte{'b', n}, Value: []byte{n}}}
 	epochPairs := []*proto.KVPair{{Key: []byte("epoch_registry"), Value: p.epochRow}}
 	cursorModule, cursorKey, cursorValue := node.EVMOnlyCursorRowForTesting(p.store.Version() + 1)
+	_, chainIDKey, chainIDValue := node.EVMOnlyChainIDRowForTesting(testEVMChainID)
 	require.NoError(t, p.store.ApplyChangeSets(p.store.Version()+1, []*proto.NamedChangeSet{
 		{Name: "evm", Changeset: proto.ChangeSet{Pairs: evmPairs}},
 		{Name: "bank", Changeset: proto.ChangeSet{Pairs: bankPairs}},
 		{Name: "autobahn", Changeset: proto.ChangeSet{Pairs: epochPairs}},
-		{Name: cursorModule, Changeset: proto.ChangeSet{Pairs: []*proto.KVPair{{Key: cursorKey, Value: cursorValue}}}},
+		{Name: cursorModule, Changeset: proto.ChangeSet{Pairs: []*proto.KVPair{
+			{Key: cursorKey, Value: cursorValue},
+			{Key: chainIDKey, Value: chainIDValue},
+		}}},
 	}))
 	v, err := p.store.Commit(p.store.Version() + 1)
 	require.NoError(t, err)

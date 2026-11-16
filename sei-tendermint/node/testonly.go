@@ -52,6 +52,12 @@ func EVMOnlyCursorRowForTesting(height int64) (string, []byte, []byte) {
 	return evmonlyapp.CursorRowForTesting(height)
 }
 
+// EVMOnlyChainIDRowForTesting returns the module, key and value of the chain ID row that the
+// EVM-only application commits with every block on chain chainID. Intended for use in tests only.
+func EVMOnlyChainIDRowForTesting(chainID uint64) (string, []byte, []byte) {
+	return evmonlyapp.ChainIDRowForTesting(chainID)
+}
+
 // GenesisEpochRegistryRowForTesting returns the epoch_registry row of a chain whose epoch
 // registry holds only the genesis epochs of genesis. It writes registry files under scratchDir.
 // Intended for use in tests only.
