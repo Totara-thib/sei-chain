@@ -18,6 +18,8 @@ jobs:
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
       # buf 1.26.1 is the release bufbuild/buf-setup-action@v1.26.1 installed
       # here. That action and bufbuild/buf-push-action are both archived, so the
       # same release is downloaded and checked against its published SHA-256.

@@ -71,6 +71,7 @@ jobs:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
+          persist-credentials: false
           sparse-checkout: .github/workflows
       - name: Build matrix
         id: build
@@ -102,6 +103,7 @@ jobs:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
+          persist-credentials: false
           # CI only builds linux/amd64; leave the darwin/aarch64 wasmvm
           # archives (~500 MB of the tree) out of the fetch.
           sparse-checkout: ${{ env.SPARSE_CHECKOUT }}
@@ -188,6 +190,7 @@ jobs:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
+          persist-credentials: false
           sparse-checkout: |
             .github
             docker/rpcnode
@@ -256,6 +259,7 @@ jobs:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
+          persist-credentials: false
           sparse-checkout: ${{ env.SPARSE_CHECKOUT }}
           sparse-checkout-cone-mode: false
       - name: Reclaim runner disk
@@ -441,6 +445,7 @@ jobs:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
+          persist-credentials: false
           sparse-checkout: ${{ env.SPARSE_CHECKOUT }}
           sparse-checkout-cone-mode: false
       - name: Reclaim runner disk

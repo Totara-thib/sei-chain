@@ -19,6 +19,7 @@ jobs:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
+          persist-credentials: false
           path: head
         # Check the comparison base out locally so `buf breaking` never clones
         # over the network: the buf CLI caps every command at 120s, and its
@@ -26,6 +27,7 @@ jobs:
         # that budget, which made the breaking step fail intermittently.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
+          persist-credentials: false
           path: base
           ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
       - uses: bufbuild/buf-action@v1
