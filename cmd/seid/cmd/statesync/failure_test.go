@@ -1,4 +1,4 @@
-package statesyncsnapshot
+package statesync
 
 import (
 	"bytes"
@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	childEnv       = "STATESYNCSNAPSHOT_TEST_CHILD"
+	childEnv       = "STATESYNC_TEST_CHILD"
 	crashExitCode  = 3
 	maxRerunsToEnd = 3
 )
@@ -52,23 +52,23 @@ func TestChildProcess(t *testing.T) {
 	}
 	ctx := context.Background()
 	switch spec.Op {
-	case "create":
-		require.NoError(t, createWith(ctx, tg, createOptions{out: spec.Out}, os.Stdout, os.Stderr, crash))
-	case "restore":
-		require.NoError(t, restoreWith(ctx, tg, spec.From, nil, os.Stderr, crash))
-	case "create-stdout-with-logs":
+	case "export":
+		require.NoError(t, exportWith(ctx, tg, exportOptions{out: spec.Out}, os.Stdout, os.Stderr, crash))
+	case "import":
+		require.NoError(t, importWith(ctx, tg, spec.From, nil, os.Stderr, crash))
+	case "export-stdout-with-logs":
 		archive, err := takeStdout()
 		require.NoError(t, err)
 		_, _ = fmt.Fprintln(os.Stdout, "INFO a log line that a logger writes to stdout")
-		require.NoError(t, runCreate(ctx, tg, createOptions{out: "-"}, archive, os.Stderr))
+		require.NoError(t, runExport(ctx, tg, exportOptions{out: "-"}, archive, os.Stderr))
 		require.NoError(t, archive.Close())
-	case "create-command-with-pre-run-log":
+	case "export-command-with-pre-run-log":
 		parent := &cobra.Command{Use: "seid", SilenceUsage: true, PersistentPreRunE: func(*cobra.Command, []string) error {
 			_, _ = fmt.Fprintln(os.Stdout, "INFO a log line that a pre-run hook writes to stdout")
 			return errStopped
 		}}
 		parent.AddCommand(Cmd())
-		parent.SetArgs([]string{"state-sync-snapshot", "create", "--out", "-"})
+		parent.SetArgs([]string{"statesync", "export", "--out", "-"})
 		require.ErrorIs(t, parent.Execute(), errStopped)
 	default:
 		t.Fatalf("unknown op %q", spec.Op)
@@ -134,12 +134,12 @@ func rerunUntilSuccess(t *testing.T, f func() error) {
 	require.NoError(t, err, "the same command did not complete after %d reruns", maxRerunsToEnd)
 }
 
-func TestRestoreFailureGoals(t *testing.T) {
+func TestImportFailureGoals(t *testing.T) {
 	p := newProducer(t, 2)
 	earlierHeight := p.commit(t, 1)
-	earlier, _ := p.createArchive(t)
+	earlier, _ := p.exportArchive(t)
 	h := p.commit(t, 2)
-	archive, _ := p.createArchive(t)
+	archive, _ := p.exportArchive(t)
 	p.closeStore(t)
 
 	type home struct {
@@ -148,19 +148,19 @@ func TestRestoreFailureGoals(t *testing.T) {
 	}
 	homes := map[string]home{
 		"a fresh home": {newHome: freshHome, marker: utils.None[int64]()},
-		"a home with an earlier restore": {
+		"a home with an earlier import": {
 			newHome: func(t *testing.T) target {
 				tg := freshHome(t)
-				require.NoError(t, runRestore(t.Context(), tg, earlier, nil, &bytes.Buffer{}))
+				require.NoError(t, runImport(t.Context(), tg, earlier, nil, &bytes.Buffer{}))
 				return tg
 			},
 			marker: utils.Some(earlierHeight),
 		},
 	}
 	steps := []string{
-		restoreStepChecked, restoreStepVaultCleared, restoreStepFlatKVCleared, restoreStepImported,
-		restoreStepMarked, restoreStepProofInstalled, restoreStepEpochSeeded, restoreStepAnchorStored,
-		restoreStepInstalled,
+		importStepChecked, importStepVaultCleared, importStepFlatKVCleared, importStepImported,
+		importStepMarked, importStepProofInstalled, importStepEpochSeeded, importStepAnchorStored,
+		importStepInstalled,
 	}
 	for homeName, hm := range homes {
 		for _, step := range steps {
@@ -168,15 +168,15 @@ func TestRestoreFailureGoals(t *testing.T) {
 				t.Run(fmt.Sprintf("%s/%s/%s", homeName, step, kind), func(t *testing.T) {
 					tg := hm.newHome(t)
 					before := homeTree(t, tg)
-					restore := func(stop stepHook) error {
-						return restoreWith(t.Context(), tg, archive, nil, io.Discard, stop)
+					run := func(stop stepHook) error {
+						return importWith(t.Context(), tg, archive, nil, io.Discard, stop)
 					}
-					spec := childSpec{Op: "restore", PSD: tg.layout.PersistentStateDir, From: archive}
-					if !stopOnce(t, kind, step, restore, spec) {
-						t.Skipf("restore does not reach %q on this home", step)
+					spec := childSpec{Op: "import", PSD: tg.layout.PersistentStateDir, From: archive}
+					if !stopOnce(t, kind, step, run, spec) {
+						t.Skipf("import does not reach %q on this home", step)
 					}
 					requireSafeStop(t, tg, step, before, hm.marker, p.proofs[h], h)
-					rerunUntilSuccess(t, func() error { return restore(noStop) })
+					rerunUntilSuccess(t, func() error { return run(noStop) })
 					requireRestored(t, tg, p, h)
 				})
 			}
@@ -184,10 +184,10 @@ func TestRestoreFailureGoals(t *testing.T) {
 	}
 }
 
-// requireSafeStop asserts what a restore of the checkpoint at h, whose state sync proof file is
+// requireSafeStop asserts what an import of the checkpoint at h, whose state sync proof file is
 // proof, left on the home of tg when it stopped at step. The home held before and the restore
-// marker for marker when the restore started. Before restore writes its marker, the home keeps its
-// marker, and keeps its files until restore clears an earlier restore. Once restore writes its
+// marker for marker when the import started. Before import writes its marker, the home keeps its
+// marker, and keeps its files until import clears an earlier import. Once import writes its
 // marker, FlatKV reaches h only at the last step, so a node never finds FlatKV at the marker height
 // without the state sync proof file, the epoch registry and the restore anchor of that height.
 func requireSafeStop(
@@ -201,13 +201,13 @@ func requireSafeStop(
 ) {
 	t.Helper()
 	switch step {
-	case restoreStepChecked:
+	case importStepChecked:
 		require.Equal(t, before, homeTree(t, tg))
-	case restoreStepVaultCleared:
+	case importStepVaultCleared:
 		requireMarker(t, tg, marker)
 		require.NoDirExists(t, tg.layout.AppHashVaultDir)
-		require.Equal(t, marker.OrPanic("only an earlier restore has a vault to clear"), flatKVHeight(t, tg))
-	case restoreStepFlatKVCleared, restoreStepImported:
+		require.Equal(t, marker.OrPanic("only an earlier import has a vault to clear"), flatKVHeight(t, tg))
+	case importStepFlatKVCleared, importStepImported:
 		requireMarker(t, tg, marker)
 		if marker.IsPresent() {
 			require.NoDirExists(t, tg.layout.AppHashVaultDir)
@@ -215,22 +215,22 @@ func requireSafeStop(
 		} else {
 			require.Equal(t, before, homeTree(t, tg))
 		}
-	case restoreStepMarked, restoreStepEpochSeeded:
+	case importStepMarked, importStepEpochSeeded:
 		requireMarker(t, tg, utils.Some(h))
 		require.NoDirExists(t, tg.layout.AppHashVaultDir)
 		require.Zero(t, flatKVHeight(t, tg))
-	case restoreStepProofInstalled:
+	case importStepProofInstalled:
 		requireMarker(t, tg, utils.Some(h))
 		got, err := os.ReadFile(tg.layout.RestoreProofFile)
 		require.NoError(t, err)
 		require.Equal(t, proof, got)
 		require.NoDirExists(t, tg.layout.AppHashVaultDir)
 		require.Zero(t, flatKVHeight(t, tg))
-	case restoreStepAnchorStored:
+	case importStepAnchorStored:
 		requireMarker(t, tg, utils.Some(h))
 		requireAnchor(t, tg, h)
 		require.Zero(t, flatKVHeight(t, tg))
-	case restoreStepInstalled:
+	case importStepInstalled:
 		requireMarker(t, tg, utils.Some(h))
 		require.Equal(t, h, flatKVHeight(t, tg))
 	default:
@@ -243,21 +243,21 @@ func homeTree(t *testing.T, tg target) map[string]string {
 	t.Helper()
 	tree := treeOf(t, tg.layout.PersistentStateDir)
 	for p := range tree {
-		if p == restoreStagingDirName || strings.HasPrefix(p, restoreStagingDirName+string(filepath.Separator)) {
+		if p == importStagingDirName || strings.HasPrefix(p, importStagingDirName+string(filepath.Separator)) {
 			delete(tree, p)
 		}
 	}
 	return tree
 }
 
-func TestCreateFailureGoals(t *testing.T) {
+func TestExportFailureGoals(t *testing.T) {
 	p := newProducer(t, 2)
 	p.commit(t, 1)
 	h := p.commit(t, 2)
 	p.closeStore(t)
 	want := treeOf(t, p.layout.PersistentStateDir)
 
-	steps := []string{createStepStaged, createStepLinked, createStepManifest, createStepWritten}
+	steps := []string{exportStepStaged, exportStepLinked, exportStepManifest, exportStepWritten}
 	for _, toStdout := range []bool{false, true} {
 		for _, step := range steps {
 			for _, kind := range []stopKind{stopWithError, stopWithCrash} {
@@ -267,12 +267,12 @@ func TestCreateFailureGoals(t *testing.T) {
 					if toStdout {
 						out = "-"
 					}
-					create := func(stop stepHook) error {
-						return createWith(t.Context(), p.target, createOptions{out: out}, io.Discard, io.Discard, stop)
+					run := func(stop stepHook) error {
+						return exportWith(t.Context(), p.target, exportOptions{out: out}, io.Discard, io.Discard, stop)
 					}
-					spec := childSpec{Op: "create", PSD: p.layout.PersistentStateDir, Out: out}
-					require.True(t, stopOnce(t, kind, step, create, spec))
-					rerunUntilSuccess(t, func() error { return create(noStop) })
+					spec := childSpec{Op: "export", PSD: p.layout.PersistentStateDir, Out: out}
+					require.True(t, stopOnce(t, kind, step, run, spec))
+					rerunUntilSuccess(t, func() error { return run(noStop) })
 
 					require.Equal(t, want, treeOf(t, p.layout.PersistentStateDir))
 					entries, err := os.ReadDir(outDir)
@@ -289,23 +289,23 @@ func TestCreateFailureGoals(t *testing.T) {
 	}
 }
 
-func TestCreateKeepsLogLinesOutOfTheArchive(t *testing.T) {
+func TestExportKeepsLogLinesOutOfTheArchive(t *testing.T) {
 	p := newProducer(t, 2)
 	h := p.commit(t, 1)
 	p.closeStore(t)
 
-	code, stdout, stderr := runChild(t, childSpec{Op: "create-stdout-with-logs", PSD: p.layout.PersistentStateDir})
+	code, stdout, stderr := runChild(t, childSpec{Op: "export-stdout-with-logs", PSD: p.layout.PersistentStateDir})
 	require.Equal(t, 0, code, "child stderr: %s", stderr)
 	require.Contains(t, string(stderr), "a log line that a logger writes to stdout")
 	require.Equal(t, h, heightLine(t, filterHeightLines(stderr)))
 
 	dst := freshHome(t)
-	require.NoError(t, runRestore(t.Context(), dst, "-", bytes.NewReader(stdout), &bytes.Buffer{}))
+	require.NoError(t, runImport(t.Context(), dst, "-", bytes.NewReader(stdout), &bytes.Buffer{}))
 	requireRestored(t, dst, p, h)
 }
 
-func TestCreateCommandTakesStdoutBeforeTheParentPreRun(t *testing.T) {
-	code, stdout, stderr := runChild(t, childSpec{Op: "create-command-with-pre-run-log"})
+func TestExportCommandTakesStdoutBeforeTheParentPreRun(t *testing.T) {
+	code, stdout, stderr := runChild(t, childSpec{Op: "export-command-with-pre-run-log"})
 	require.Equal(t, 0, code, "child stderr: %s", stderr)
 	require.Empty(t, stdout)
 	require.Contains(t, string(stderr), "a log line that a pre-run hook writes to stdout")

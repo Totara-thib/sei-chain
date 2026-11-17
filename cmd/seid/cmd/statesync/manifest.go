@@ -1,4 +1,4 @@
-package statesyncsnapshot
+package statesync
 
 import (
 	"bytes"

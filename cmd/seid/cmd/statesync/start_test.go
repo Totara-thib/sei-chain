@@ -1,4 +1,4 @@
-package statesyncsnapshot
+package statesync
 
 import (
 	"bytes"
@@ -77,16 +77,16 @@ func newFullnodeHome(t *testing.T) fullnodeHome {
 	return fullnodeHome{conf: conf, giga: giga, genDoc: loaded, target: tg}
 }
 
-// TestARestoredFullnodeStartsAtTheCheckpoint restores an archive into a fullnode home and runs
+// TestARestoredFullnodeStartsAtTheCheckpoint imports an archive into a fullnode home and runs
 // the node start of that home up to its giga router twice. The first start seeds road block H
 // and removes the restore files; the second finds the seeded BlockDB and seeds nothing.
 func TestARestoredFullnodeStartsAtTheCheckpoint(t *testing.T) {
 	p := newProducer(t, 0)
 	p.commit(t, 1)
 	p.commit(t, 2)
-	archive, h := p.createArchive(t)
+	archive, h := p.exportArchive(t)
 	home := newFullnodeHome(t)
-	require.NoError(t, runRestore(t.Context(), home.target, archive, nil, &bytes.Buffer{}))
+	require.NoError(t, runImport(t.Context(), home.target, archive, nil, &bytes.Buffer{}))
 
 	road := atypes.RoadIndex(h) //nolint:gosec // test heights are positive.
 	want := utils.Some(blockstore.SuffixRange{First: road, NextBlock: road + 1, NextAppProposal: road + 1, NextAppQC: road + 1})
@@ -103,9 +103,9 @@ func TestARestoredFullnodeStartsAtTheCheckpoint(t *testing.T) {
 func TestARestoredHomeDoesNotStartWithTheSwitchOff(t *testing.T) {
 	p := newProducer(t, 0)
 	p.commit(t, 1)
-	archive, h := p.createArchive(t)
+	archive, h := p.exportArchive(t)
 	home := newFullnodeHome(t)
-	require.NoError(t, runRestore(t.Context(), home.target, archive, nil, &bytes.Buffer{}))
+	require.NoError(t, runImport(t.Context(), home.target, archive, nil, &bytes.Buffer{}))
 
 	home.giga.StateSync.Enabled = false
 	_, _, err := node.StartFullnodeForTesting(t.Context(), home.conf, home.giga, home.genDoc)

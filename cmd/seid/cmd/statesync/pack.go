@@ -1,4 +1,4 @@
-package statesyncsnapshot
+package statesync
 
 import (
 	"archive/tar"
@@ -18,7 +18,7 @@ import (
 const (
 	// encoderConcurrency is the number of zstd encoder goroutines.
 	encoderConcurrency = 2
-	// archiveWindowSize is the zstd window of an archive, and the largest window restore accepts.
+	// archiveWindowSize is the zstd window of an archive, and the largest window import accepts.
 	archiveWindowSize = 8 << 20
 )
 

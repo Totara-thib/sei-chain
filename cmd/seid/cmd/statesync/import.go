@@ -1,4 +1,4 @@
-package statesyncsnapshot
+package statesync
 
 import (
 	"context"
@@ -23,33 +23,33 @@ import (
 )
 
 const (
-	restoreStagingDirName = ".state-sync-restore"
+	importStagingDirName = ".state-sync-import"
 	// epochStagingDirName is the dir under the staging dir that the epoch registry is prepared in.
 	epochStagingDirName = "epoch-registry"
 )
 
-// Steps of restore at which a stepHook is called, in the order restore reaches them.
+// Steps of import at which a stepHook is called, in the order import reaches them.
 const (
-	restoreStepChecked        = "restore: home checked"
-	restoreStepVaultCleared   = "restore: app-hash vault cleared"
-	restoreStepFlatKVCleared  = "restore: FlatKV cleared"
-	restoreStepImported       = "restore: FlatKV imported"
-	restoreStepMarked         = "restore: marker written"
-	restoreStepProofInstalled = "restore: state sync proof installed"
-	restoreStepEpochSeeded    = "restore: epoch registry seeded"
-	restoreStepAnchorStored   = "restore: restore anchor stored"
-	restoreStepInstalled      = "restore: checkpoint installed"
+	importStepChecked        = "import: home checked"
+	importStepVaultCleared   = "import: app-hash vault cleared"
+	importStepFlatKVCleared  = "import: FlatKV cleared"
+	importStepImported       = "import: FlatKV imported"
+	importStepMarked         = "import: marker written"
+	importStepProofInstalled = "import: state sync proof installed"
+	importStepEpochSeeded    = "import: epoch registry seeded"
+	importStepAnchorStored   = "import: restore anchor stored"
+	importStepInstalled      = "import: checkpoint installed"
 )
 
-// runRestore restores the archive at from, or on stdin when from is "-", into the home of t.
-func runRestore(ctx context.Context, t target, from string, stdin io.Reader, stderr io.Writer) error {
-	return restoreWith(ctx, t, from, stdin, stderr, noStop)
+// runImport imports the archive at from, or on stdin when from is "-", into the home of t.
+func runImport(ctx context.Context, t target, from string, stdin io.Reader, stderr io.Writer) error {
+	return importWith(ctx, t, from, stdin, stderr, noStop)
 }
 
-// restoreWith is runRestore with a hook that can stop it at each step.
-func restoreWith(ctx context.Context, t target, from string, stdin io.Reader, stderr io.Writer, stop stepHook) error {
+// importWith is runImport with a hook that can stop it at each step.
+func importWith(ctx context.Context, t target, from string, stdin io.Reader, stderr io.Writer, stop stepHook) error {
 	if t.mode == tmcfg.ModeValidator {
-		return errors.New("restore is for fullnodes; this home is configured as a validator")
+		return errors.New("import is for fullnodes; this home is configured as a validator")
 	}
 	lock, err := flatkv.LockRoot(t.layout.FlatKVDir)
 	if err != nil {
@@ -57,15 +57,15 @@ func restoreWith(ctx context.Context, t target, from string, stdin io.Reader, st
 	}
 	defer func() { _ = lock.Unlock() }()
 
-	staging := filepath.Join(t.layout.PersistentStateDir, restoreStagingDirName)
-	if err := removeRestoreLeftovers(staging, t.layout); err != nil {
+	staging := filepath.Join(t.layout.PersistentStateDir, importStagingDirName)
+	if err := removeImportLeftovers(staging, t.layout); err != nil {
 		return err
 	}
 	resume, err := checkHome(t.layout, lock)
 	if err != nil {
 		return err
 	}
-	if err := stop(restoreStepChecked); err != nil {
+	if err := stop(importStepChecked); err != nil {
 		return err
 	}
 
@@ -84,8 +84,8 @@ func restoreWith(ctx context.Context, t target, from string, stdin io.Reader, st
 	}
 	if resume {
 		// The vault accepts the restore anchor only as the first record of an empty vault, so the
-		// anchor of the earlier restore goes before the new one is stored.
-		if err := clearEarlierRestore(t.layout, lock, stop); err != nil {
+		// anchor of the earlier import goes before the new one is stored.
+		if err := clearEarlierImport(t.layout, lock, stop); err != nil {
 			return err
 		}
 	}
@@ -100,38 +100,38 @@ func restoreWith(ctx context.Context, t target, from string, stdin io.Reader, st
 	if err != nil {
 		return err
 	}
-	if err := stop(restoreStepImported); err != nil {
+	if err := stop(importStepImported); err != nil {
 		return err
 	}
 
 	if err := writeFileAtomic(t.layout.RestoreMarkerFile, []byte(strconv.FormatInt(m.CheckpointHeight, 10)+"\n")); err != nil {
 		return fmt.Errorf("write the restore marker: %w", err)
 	}
-	if err := stop(restoreStepMarked); err != nil {
+	if err := stop(importStepMarked); err != nil {
 		return err
 	}
 	if err := writeFileAtomic(t.layout.RestoreProofFile, staged.proof); err != nil {
 		return fmt.Errorf("install the state sync proof file: %w", err)
 	}
-	if err := stop(restoreStepProofInstalled); err != nil {
+	if err := stop(importStepProofInstalled); err != nil {
 		return err
 	}
 	if err := node.InstallEpochRegistry(t.layout, staged.epochDir); err != nil {
 		return err
 	}
-	if err := stop(restoreStepEpochSeeded); err != nil {
+	if err := stop(importStepEpochSeeded); err != nil {
 		return err
 	}
 	if err := node.StoreRestoreAnchor(t.layout, t.epochGenesis, m.CheckpointHeight, staged.appHash); err != nil {
 		return err
 	}
-	if err := stop(restoreStepAnchorStored); err != nil {
+	if err := stop(importStepAnchorStored); err != nil {
 		return err
 	}
 	if err := installArchive(lock, staging, m); err != nil {
 		return err
 	}
-	if err := stop(restoreStepInstalled); err != nil {
+	if err := stop(importStepInstalled); err != nil {
 		return err
 	}
 	if err := os.RemoveAll(staging); err != nil {
@@ -141,20 +141,20 @@ func restoreWith(ctx context.Context, t target, from string, stdin io.Reader, st
 	if err := printHeight(stderr, m.CheckpointHeight); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(stderr, "Restored height %d. Start the node; on start it seeds height %d from %s and syncs from there.\n",
+	_, _ = fmt.Fprintf(stderr, "Imported height %d. Start the node; on start it seeds height %d from %s and syncs from there.\n",
 		m.CheckpointHeight, m.CheckpointHeight, t.layout.RestoreProofFile)
 	return nil
 }
 
-// removeRestoreLeftovers removes the staging dir and the temporary files that a restore which
+// removeImportLeftovers removes the staging dir and the temporary files that an import which
 // stopped before its cleanup left.
-func removeRestoreLeftovers(staging string, layout node.AutobahnLayout) error {
+func removeImportLeftovers(staging string, layout node.AutobahnLayout) error {
 	if err := os.RemoveAll(staging); err != nil {
-		return fmt.Errorf("remove the staging dir of an earlier restore: %w", err)
+		return fmt.Errorf("remove the staging dir of an earlier import: %w", err)
 	}
 	for _, path := range []string{layout.RestoreMarkerFile, layout.RestoreProofFile} {
 		if err := os.Remove(path + ".tmp"); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("remove a temporary file of an earlier restore: %w", err)
+			return fmt.Errorf("remove a temporary file of an earlier import: %w", err)
 		}
 	}
 	return nil
@@ -162,7 +162,7 @@ func removeRestoreLeftovers(staging string, layout node.AutobahnLayout) error {
 
 // checkHome returns an error if the home has block, receipt or state data, or has FlatKV data, an
 // epoch registry or app hashes without the restore marker. It reports whether the marker is
-// present, in which case that data is from an earlier restore and restore replaces it.
+// present, in which case that data is from an earlier import and import replaces it.
 func checkHome(layout node.AutobahnLayout, lock *flatkv.RootLock) (resume bool, err error) {
 	stores := append(slices.Clone(layout.BlockDBDirs), layout.ReceiptStoreDir, layout.StateStoreDir)
 	var nonEmpty []string
@@ -176,12 +176,12 @@ func checkHome(layout node.AutobahnLayout, lock *flatkv.RootLock) (resume bool, 
 		}
 	}
 	if len(nonEmpty) > 0 {
-		return false, fmt.Errorf("restore needs a home without block, receipt or state data; remove %s", strings.Join(nonEmpty, ", "))
+		return false, fmt.Errorf("import needs a home without block, receipt or state data; remove %s", strings.Join(nonEmpty, ", "))
 	}
 
-	// Only restore writes the marker, before it replaces the epoch registry, the vault and FlatKV,
+	// Only import writes the marker, before it replaces the epoch registry, the vault and FlatKV,
 	// and the seed deletes it only after it writes block data. With an empty block store the marker
-	// means all three are restore's own, or restore stopped before it installed them and may retry.
+	// means all three are import's own, or import stopped before it installed them and may retry.
 	if _, err := os.Stat(layout.RestoreMarkerFile); err == nil {
 		return true, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -204,7 +204,7 @@ func checkHome(layout node.AutobahnLayout, lock *flatkv.RootLock) (resume bool, 
 		}
 	}
 	if len(nonEmpty) > 0 {
-		return false, fmt.Errorf("this home holds Autobahn state that restore did not write; remove %s and run restore again",
+		return false, fmt.Errorf("this home holds Autobahn state that import did not write; remove %s and run import again",
 			strings.Join(nonEmpty, ", "))
 	}
 	return false, nil
@@ -289,7 +289,7 @@ func writeFileAtomic(path string, data []byte) error {
 	return syncPath(filepath.Dir(path))
 }
 
-// stagedArchive is what restore installs from an archive that stageArchive checked.
+// stagedArchive is what import installs from an archive that stageArchive checked.
 type stagedArchive struct {
 	// proof is the state sync proof file of the checkpoint.
 	proof []byte
@@ -400,18 +400,18 @@ func importArchivedRows(ctx context.Context, archive *archiveReader, m *manifest
 	return time.Since(start), nil
 }
 
-// clearEarlierRestore removes the app hashes and then the FlatKV data of an earlier restore.
-func clearEarlierRestore(layout node.AutobahnLayout, lock *flatkv.RootLock, stop stepHook) error {
+// clearEarlierImport removes the app hashes and then the FlatKV data of an earlier import.
+func clearEarlierImport(layout node.AutobahnLayout, lock *flatkv.RootLock, stop stepHook) error {
 	if err := removeDir(layout.AppHashVaultDir); err != nil {
-		return fmt.Errorf("clear the app-hash vault of an earlier restore: %w", err)
+		return fmt.Errorf("clear the app-hash vault of an earlier import: %w", err)
 	}
-	if err := stop(restoreStepVaultCleared); err != nil {
+	if err := stop(importStepVaultCleared); err != nil {
 		return err
 	}
 	if err := lock.Clear(); err != nil {
-		return fmt.Errorf("clear the FlatKV data of an earlier restore: %w", err)
+		return fmt.Errorf("clear the FlatKV data of an earlier import: %w", err)
 	}
-	if err := stop(restoreStepFlatKVCleared); err != nil {
+	if err := stop(importStepFlatKVCleared); err != nil {
 		return err
 	}
 	return nil

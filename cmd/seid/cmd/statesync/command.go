@@ -1,6 +1,6 @@
-// Package statesyncsnapshot implements `seid state-sync-snapshot`, which packs a node's FlatKV
-// checkpoint into an archive, and restores one into a fresh Autobahn fullnode home.
-package statesyncsnapshot
+// Package statesync implements `seid statesync`, which exports a node's FlatKV checkpoint as a
+// Giga state sync archive, and imports one into a fresh Autobahn fullnode home.
+package statesync
 
 import (
 	"context"
@@ -25,23 +25,23 @@ import (
 // errDisabled is returned by both commands when [giga.state_sync] enabled is false.
 var errDisabled = errors.New("giga state sync is disabled; set [giga.state_sync] enabled = true in app.toml")
 
-// Cmd returns the `state-sync-snapshot` command group.
+// Cmd returns the `statesync` command group.
 func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "state-sync-snapshot",
-		Short: "Create or restore a Giga state sync archive",
+		Use:   "statesync",
+		Short: "Export or import a Giga state sync archive",
 	}
-	cmd.AddCommand(createCmd(), restoreCmd())
+	cmd.AddCommand(exportCmd(), importCmd())
 	return cmd
 }
 
-func createCmd() *cobra.Command {
-	var opts createOptions
+func exportCmd() *cobra.Command {
+	var opts exportOptions
 	var archive *os.File
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Pack the current FlatKV checkpoint into an archive",
-		Long: `Pack the current FlatKV checkpoint of this home into an archive. It is
+		Use:   "export",
+		Short: "Export the current FlatKV checkpoint as an archive",
+		Long: `Export the current FlatKV checkpoint of this home as an archive. It is
 safe to run while the node runs. With --out -, it writes the archive to stdout and prints one
 line {"height":H} on stderr before the first archive byte. Log lines also go to stderr, so a
 reader must find that line among them.`,
@@ -74,7 +74,7 @@ reader must find that line among them.`,
 				return err
 			}
 			return withSignals(cmd.Context(), func(ctx context.Context) error {
-				return runCreate(ctx, t, opts, stdout, cmd.ErrOrStderr())
+				return runExport(ctx, t, opts, stdout, cmd.ErrOrStderr())
 			})
 		},
 	}
@@ -85,15 +85,15 @@ reader must find that line among them.`,
 	return cmd
 }
 
-func restoreCmd() *cobra.Command {
+func importCmd() *cobra.Command {
 	var from string
 	cmd := &cobra.Command{
-		Use:   "restore",
-		Short: "Restore an archive into a fresh Autobahn fullnode home",
-		Long: `Restore an archive into a fresh Autobahn fullnode home. If it fails or stops, run the same
-command again. It never deletes Autobahn data that an earlier restore did not write. It refuses
+		Use:   "import",
+		Short: "Import an archive into a fresh Autobahn fullnode home",
+		Long: `Import an archive into a fresh Autobahn fullnode home. If it fails or stops, run the same
+command again. It never deletes Autobahn data that an earlier import did not write. It refuses
 when the persistent state dir has less free space than the key and value bytes of the archive;
-the import needs more than that for the database WAL and compaction.`,
+the database needs more than that for its WAL and compaction.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if from == "" {
 				return errors.New("--from is required")
@@ -103,7 +103,7 @@ the import needs more than that for the database WAL and compaction.`,
 				return err
 			}
 			return withSignals(cmd.Context(), func(ctx context.Context) error {
-				return runRestore(ctx, t, from, cmd.InOrStdin(), cmd.ErrOrStderr())
+				return runImport(ctx, t, from, cmd.InOrStdin(), cmd.ErrOrStderr())
 			})
 		},
 	}
@@ -216,7 +216,7 @@ func (c ctxReader) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }
 
-// stepHook is called at named steps of create and restore. A non-nil error stops the command there.
+// stepHook is called at named steps of export and import. A non-nil error stops the command there.
 type stepHook func(step string) error
 
 func noStop(string) error { return nil }

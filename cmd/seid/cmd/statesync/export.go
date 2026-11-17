@@ -1,4 +1,4 @@
-package statesyncsnapshot
+package statesync
 
 import (
 	"context"
@@ -18,60 +18,60 @@ import (
 )
 
 const (
-	createStagingDirName = ".state-sync-create"
+	exportStagingDirName = ".state-sync-export"
 	linkAttempts         = 3
 )
 
 var (
-	// errCreateRunning is returned when another create holds a dir that this create needs.
-	errCreateRunning = errors.New("another state-sync-snapshot create is running")
+	// errExportRunning is returned when another export holds a dir that this export needs.
+	errExportRunning = errors.New("another statesync export is running")
 	// errNoProofFile is returned when the node has not written the state sync proof file of a
-	// checkpoint that create would pack.
+	// checkpoint that export would pack.
 	errNoProofFile = errors.New("the node has written no state sync proof file (is [giga.state_sync] enabled on it?)")
 )
 
-// Steps of create at which a stepHook is called.
+// Steps of export at which a stepHook is called.
 const (
-	createStepStaged   = "create: staging ready"
-	createStepLinked   = "create: checkpoint linked"
-	createStepManifest = "create: manifest built"
-	createStepWritten  = "create: archive written"
+	exportStepStaged   = "export: staging ready"
+	exportStepLinked   = "export: checkpoint linked"
+	exportStepManifest = "export: manifest built"
+	exportStepWritten  = "export: archive written"
 )
 
-// createOptions are the flags of create.
-type createOptions struct {
+// exportOptions are the flags of export.
+type exportOptions struct {
 	out           string
 	height        int64
 	stagingParent string
 }
 
-// runCreate packs a checkpoint of t into an archive at opts.out, or into stdout when opts.out is "-".
-func runCreate(ctx context.Context, t target, opts createOptions, stdout, stderr io.Writer) error {
-	return createWith(ctx, t, opts, stdout, stderr, noStop)
+// runExport packs a checkpoint of t into an archive at opts.out, or into stdout when opts.out is "-".
+func runExport(ctx context.Context, t target, opts exportOptions, stdout, stderr io.Writer) error {
+	return exportWith(ctx, t, opts, stdout, stderr, noStop)
 }
 
-// createWith is runCreate with a hook that can stop it at each step.
-func createWith(ctx context.Context, t target, opts createOptions, stdout, stderr io.Writer, stop stepHook) error {
+// exportWith is runExport with a hook that can stop it at each step.
+func exportWith(ctx context.Context, t target, opts exportOptions, stdout, stderr io.Writer, stop stepHook) error {
 	parent := opts.stagingParent
 	if parent == "" {
 		parent = t.layout.PersistentStateDir
 	}
-	unlock, err := lockCreateDirs(parent, opts.out)
+	unlock, err := lockExportDirs(parent, opts.out)
 	if err != nil {
 		return err
 	}
 	defer unlock()
 
-	stagingRoot := filepath.Join(parent, createStagingDirName)
-	if err := removeCreateLeftovers(stagingRoot, opts.out); err != nil {
+	stagingRoot := filepath.Join(parent, exportStagingDirName)
+	if err := removeExportLeftovers(stagingRoot, opts.out); err != nil {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(stagingRoot) }()
-	stage := filepath.Join(stagingRoot, "create")
+	stage := filepath.Join(stagingRoot, "export")
 	if err := os.MkdirAll(stage, 0o750); err != nil {
 		return fmt.Errorf("create staging dir: %w", err)
 	}
-	if err := stop(createStepStaged); err != nil {
+	if err := stop(exportStepStaged); err != nil {
 		return err
 	}
 
@@ -82,7 +82,7 @@ func createWith(ctx context.Context, t target, opts createOptions, stdout, stder
 	if err := flatkv.VerifySnapshotDir(staged.checkpoint, staged.version); err != nil {
 		return fmt.Errorf("verify the linked checkpoint: %w", err)
 	}
-	if err := stop(createStepLinked); err != nil {
+	if err := stop(exportStepLinked); err != nil {
 		return err
 	}
 
@@ -90,7 +90,7 @@ func createWith(ctx context.Context, t target, opts createOptions, stdout, stder
 	if err != nil {
 		return err
 	}
-	if err := stop(createStepManifest); err != nil {
+	if err := stop(exportStepManifest); err != nil {
 		return err
 	}
 	if opts.out == "-" {
@@ -100,7 +100,7 @@ func createWith(ctx context.Context, t target, opts createOptions, stdout, stder
 		if err := writeArchive(ctx, stdout, m, staged.proof, staged.checkpoint); err != nil {
 			return err
 		}
-		return stop(createStepWritten)
+		return stop(exportStepWritten)
 	}
 	if err := writeArchiveFile(ctx, opts.out, m, staged.proof, staged.checkpoint, stop); err != nil {
 		return err
@@ -108,10 +108,10 @@ func createWith(ctx context.Context, t target, opts createOptions, stdout, stder
 	return printHeight(stderr, staged.version)
 }
 
-// lockCreateDirs takes the create lock on the staging parent and, unless out is "-", on the dir of
+// lockExportDirs takes the export lock on the staging parent and, unless out is "-", on the dir of
 // out, until the returned function is called.
-func lockCreateDirs(stagingParent, out string) (func(), error) {
-	unlockStaging, err := lockCreate(stagingParent)
+func lockExportDirs(stagingParent, out string) (func(), error) {
+	unlockStaging, err := lockExport(stagingParent)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func lockCreateDirs(stagingParent, out string) (func(), error) {
 	if same {
 		return unlockStaging, nil
 	}
-	unlockOut, err := lockCreate(outDir)
+	unlockOut, err := lockExport(outDir)
 	if err != nil {
 		unlockStaging()
 		return nil, err
@@ -135,9 +135,9 @@ func lockCreateDirs(stagingParent, out string) (func(), error) {
 	return func() { unlockOut(); unlockStaging() }, nil
 }
 
-// lockCreate takes an exclusive lock on dir until the returned function is called. It fails at once
-// with errCreateRunning when another create holds the lock.
-func lockCreate(dir string) (func(), error) {
+// lockExport takes an exclusive lock on dir until the returned function is called. It fails at once
+// with errExportRunning when another export holds the lock.
+func lockExport(dir string) (func(), error) {
 	f, err := os.Open(dir) //nolint:gosec // dir is the operator's staging parent or output dir.
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", dir, err)
@@ -145,7 +145,7 @@ func lockCreate(dir string) (func(), error) {
 	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil { //nolint:gosec // a file descriptor fits in an int.
 		_ = f.Close()
 		if errors.Is(err, unix.EWOULDBLOCK) {
-			return nil, fmt.Errorf("%w on %s", errCreateRunning, dir)
+			return nil, fmt.Errorf("%w on %s", errExportRunning, dir)
 		}
 		return nil, fmt.Errorf("lock %s: %w", dir, err)
 	}
@@ -165,18 +165,18 @@ func sameDir(a, b string) (bool, error) {
 	return os.SameFile(ai, bi), nil
 }
 
-// removeCreateLeftovers removes the staging root and the partial archive that a create which stopped
+// removeExportLeftovers removes the staging root and the partial archive that an export which stopped
 // before its cleanup left.
-func removeCreateLeftovers(stagingRoot, out string) error {
+func removeExportLeftovers(stagingRoot, out string) error {
 	// The staging hard links keep pruned checkpoint files on disk until they are removed.
 	if err := os.RemoveAll(stagingRoot); err != nil {
-		return fmt.Errorf("remove the staging files of an earlier create: %w", err)
+		return fmt.Errorf("remove the staging files of an earlier export: %w", err)
 	}
 	if out == "-" {
 		return nil
 	}
 	if err := os.Remove(out + ".partial"); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("remove the partial archive of an earlier create: %w", err)
+		return fmt.Errorf("remove the partial archive of an earlier export: %w", err)
 	}
 	return nil
 }
@@ -311,7 +311,7 @@ func writeArchiveFile(
 	if err := f.Close(); err != nil {
 		return err
 	}
-	if err := stop(createStepWritten); err != nil {
+	if err := stop(exportStepWritten); err != nil {
 		return err
 	}
 	if err := os.Rename(partial, out); err != nil {

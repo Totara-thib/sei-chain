@@ -132,7 +132,7 @@ type RPCConfig struct {
 
 // StateSyncConfig is the [giga.state_sync] sub-table: whether this node uses giga state sync.
 type StateSyncConfig struct {
-	// Enabled allows the state-sync-snapshot create and restore commands and the seed of a restored
+	// Enabled allows the statesync export and import commands and the seed of a restored
 	// home on start. It also runs a background task that writes a state sync proof file for each
 	// retained FlatKV checkpoint; it does not create checkpoints or snapshots.
 	Enabled bool `mapstructure:"enabled"`
@@ -644,7 +644,7 @@ max_state_override_accounts = {{ .Giga.RPC.MaxStateOverrideAccounts }}
 max_state_override_slots = {{ .Giga.RPC.MaxStateOverrideSlots }}
 
 [giga.state_sync]
-# enabled allows the state-sync-snapshot create and restore commands and the seed of a restored
+# enabled allows the statesync export and import commands and the seed of a restored
 # home on start. It also runs a background task that writes a state sync proof file for each
 # retained FlatKV checkpoint. It does not create checkpoints or snapshots.
 enabled = {{ .Giga.StateSync.Enabled }}
