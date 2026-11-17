@@ -4,6 +4,9 @@ name: Run Dapp Tests
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   run-tests-devnet:
     name: Run Tests on Devnet

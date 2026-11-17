@@ -17,6 +17,9 @@ env:
   GHCR_LOCALNODE: ghcr.io/sei-protocol/sei-chain-exec-specs-localnode
   GHCR_RPCNODE: ghcr.io/sei-protocol/sei-chain-exec-specs-rpcnode
 
+permissions:
+  contents: read
+
 jobs:
   transaction-rlp:
     name: Ethereum Transaction and RLP Tests

@@ -35,6 +35,9 @@ env:
     !/sei-wasmvm/internal/api/*aarch64*
     !/sei-wasmvm/internal/api/*.dylib
 
+permissions:
+  contents: read
+
 jobs:
   # Generate the integration-test matrix from integration-test-matrix.json.
   # Runs the full matrix on every event (pull_request, push, merge_group) — all

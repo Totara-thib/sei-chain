@@ -13,6 +13,9 @@ concurrency:
 
 # TODO: we should combine these tests into go-test at some point.
 
+permissions:
+  contents: read
+
 jobs:
   tests-rocksdb:
     name: RocksDB Tests

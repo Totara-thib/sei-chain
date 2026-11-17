@@ -20,6 +20,9 @@ defaults:
   run:
     working-directory: sei-wasmvm
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest

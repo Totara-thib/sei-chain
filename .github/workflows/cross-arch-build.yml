@@ -15,6 +15,9 @@ concurrency:
 env:
   LEDGER_ENABLED: false
 
+permissions:
+  contents: read
+
 jobs:
   linux-amd64:
     name: "Linux AMD64"
@@ -107,6 +110,9 @@ jobs:
     name: "Static build inputs changed?"
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    # No checkout here: the job only lists the pull request's files.
+    permissions:
+      pull-requests: read
     outputs:
       changed: ${{ steps.diff.outputs.changed }}
     steps:

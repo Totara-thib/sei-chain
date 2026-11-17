@@ -19,6 +19,9 @@ env:
   # that subtree everywhere in this workflow to avoid double-running them.
   STATE_DB_PKG_PREFIX: github.com/sei-protocol/sei-chain/sei-db/state_db
 
+permissions:
+  contents: read
+
 jobs:
   # The race run fans out over the shard matrix. The shards and the upgrade
   # tests all roll up into the `Race Detection` job below, which is the single

@@ -25,6 +25,9 @@ defaults:
 env:
   TOTAL_RUNNERS: 5
 
+permissions:
+  contents: read
+
 jobs:
   runner-indexes:
     runs-on: ubuntu-latest
