@@ -15,8 +15,22 @@ jobs:
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-      - uses: bufbuild/buf-setup-action@v1.26.1
-      - uses: bufbuild/buf-push-action@v1
-        with:
-          input: "proto"
-          buf_token: ${{ secrets.BUF_TOKEN }}
+      # buf 1.26.1 is the release bufbuild/buf-setup-action@v1.26.1 installed
+      # here. That action and bufbuild/buf-push-action are both archived, so the
+      # same release is downloaded and checked against its published SHA-256.
+      - name: Install buf
+        env:
+          BUF_VERSION: 1.26.1
+          BUF_SHA256: 7286b1c6c84392f327991fd4c7b2e7f1bcff141cd1249e797a93d094c2f662ba
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/buf.tar.gz" \
+            "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-Linux-x86_64.tar.gz"
+          echo "${BUF_SHA256}  ${RUNNER_TEMP}/buf.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/buf.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/buf/bin" >> "$GITHUB_PATH"
+      # The command buf-push-action ran: the push is tagged with the Git commit.
+      - name: Push proto to the Buf Schema Registry
+        env:
+          BUF_TOKEN: ${{ secrets.BUF_TOKEN }}
+        run: buf push proto --tag "$GITHUB_SHA"
