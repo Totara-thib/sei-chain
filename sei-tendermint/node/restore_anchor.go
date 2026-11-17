@@ -12,17 +12,12 @@ import (
 )
 
 // VerifyStateSyncProof returns the app hash of height that the state sync proof file data
-// carries, after it verifies the road block and the AppQC of height against the epoch registry
-// that genesis opens under stateDir.
-func VerifyStateSyncProof(genesis EpochGenesis, stateDir string, height int64, data []byte) ([32]byte, error) {
+// carries, after it verifies the road block and the AppQC of height against epochs.
+func VerifyStateSyncProof(epochs CheckpointEpochs, height int64, data []byte) ([32]byte, error) {
 	if height < 1 {
 		return [32]byte{}, fmt.Errorf("checkpoint height %d is not positive", height)
 	}
-	registry, err := p2p.OpenEpochRegistry(genesis.GenDoc, genesis.Validators, stateDir)
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("open the epoch registry: %w", err)
-	}
-	_, appHash, err := p2p.VerifyStateSyncProof(registry, data, atypes.RoadIndex(height)) //nolint:gosec // height is positive.
+	_, appHash, err := p2p.VerifyStateSyncProof(epochs.registry, data, atypes.RoadIndex(height)) //nolint:gosec // height is positive.
 	return appHash, err
 }
 

@@ -22,11 +22,7 @@ import (
 	"github.com/sei-protocol/sei-chain/sei-tendermint/node"
 )
 
-const (
-	importStagingDirName = ".state-sync-import"
-	// epochStagingDirName is the dir under the staging dir that the epoch registry is prepared in.
-	epochStagingDirName = "epoch-registry"
-)
+const importStagingDirName = ".state-sync-import"
 
 // Steps of import at which a stepHook is called, in the order import reaches them.
 const (
@@ -116,7 +112,7 @@ func importWith(ctx context.Context, t target, from string, stdin io.Reader, std
 	if err := stop(importStepProofInstalled); err != nil {
 		return err
 	}
-	if err := node.InstallEpochRegistry(t.layout, staged.epochDir); err != nil {
+	if err := node.InstallEpochRegistry(t.layout, staged.epochs); err != nil {
 		return err
 	}
 	if err := stop(importStepEpochSeeded); err != nil {
@@ -293,14 +289,14 @@ func writeFileAtomic(path string, data []byte) error {
 type stagedArchive struct {
 	// proof is the state sync proof file of the checkpoint.
 	proof []byte
-	// epochDir is the dir the epoch registry of the checkpoint is prepared in.
-	epochDir string
+	// epochs is the epoch registry of the checkpoint.
+	epochs node.CheckpointEpochs
 	// appHash is the app hash of the checkpoint that the AppQC in proof signs.
 	appHash [32]byte
 }
 
-// stageArchive imports the archive into staging, prepares the epoch registry of that checkpoint,
-// and verifies the state sync proof file of the checkpoint against that registry.
+// stageArchive imports the archive into staging, opens the epoch registry of that checkpoint, and
+// verifies the state sync proof file of the checkpoint against that registry.
 func stageArchive(
 	ctx context.Context,
 	archive *archiveReader,
@@ -326,15 +322,15 @@ func stageArchive(
 	if err := requireImportedStats(checkpoint, m); err != nil {
 		return stagedArchive{}, err
 	}
-	epochDir := filepath.Join(staging, epochStagingDirName)
-	if err := node.PrepareEpochRegistry(genesis, checkpoint, m.CheckpointHeight, epochDir); err != nil {
-		return stagedArchive{}, fmt.Errorf("prepare the epoch registry: %w", err)
+	epochs, err := node.OpenCheckpointEpochs(genesis, checkpoint, m.CheckpointHeight)
+	if err != nil {
+		return stagedArchive{}, fmt.Errorf("open the epoch registry: %w", err)
 	}
-	appHash, err := node.VerifyStateSyncProof(genesis, epochDir, m.CheckpointHeight, proof)
+	appHash, err := node.VerifyStateSyncProof(epochs, m.CheckpointHeight, proof)
 	if err != nil {
 		return stagedArchive{}, fmt.Errorf("verify the archived state sync proof file: %w", err)
 	}
-	return stagedArchive{proof: proof, epochDir: epochDir, appHash: appHash}, nil
+	return stagedArchive{proof: proof, epochs: epochs, appHash: appHash}, nil
 }
 
 // requireImportedStats returns an error unless the metadata of the imported checkpoint records the

@@ -277,10 +277,13 @@ func requireRestored(t *testing.T, tg target, p *producer, height int64) {
 	require.Equal(t, p.proofs[height], proof)
 	requireAnchor(t, tg, height)
 
-	prepared := filepath.Join(t.TempDir(), "prepared")
 	checkpoint := filepath.Join(p.layout.FlatKVDir, flatkv.SnapshotDirName(height))
-	require.NoError(t, node.PrepareEpochRegistry(p.epochGenesis, checkpoint, height, prepared))
-	require.Equal(t, treeOf(t, filepath.Join(prepared, "epochs")), treeOf(t, tg.layout.EpochRegistryDir))
+	epochs, err := node.OpenCheckpointEpochs(p.epochGenesis, checkpoint, height)
+	require.NoError(t, err)
+	psd := t.TempDir()
+	want := node.AutobahnLayout{PersistentStateDir: psd, EpochRegistryDir: filepath.Join(psd, "epochs")}
+	require.NoError(t, node.InstallEpochRegistry(want, epochs))
+	require.Equal(t, treeOf(t, want.EpochRegistryDir), treeOf(t, tg.layout.EpochRegistryDir))
 
 	s := openStore(t, tg.layout.FlatKVDir, 2)
 	defer func() { require.NoError(t, s.Close()) }()
