@@ -60,7 +60,7 @@ jobs:
       POST_UPGRADE_BLOCKS: ${{ inputs.post_upgrade_blocks || '10' }}
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           fetch-depth: 0
 
@@ -77,7 +77,7 @@ jobs:
         run: bash .github/scripts/ci-relocate-go-cache.sh
 
       # See: https://github.com/actions/setup-go/releases/tag/v7
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.27.4'
 
@@ -87,7 +87,7 @@ jobs:
       - name: Upload upgrade diagnostics
         if: ${{ always() }}
         # See: https://github.com/actions/upload-artifact/releases/tag/v4
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: release-upgrade-${{ github.run_id }}
           path: ${{ runner.temp }}/sei-release-upgrade-${{ github.run_id }}/artifacts

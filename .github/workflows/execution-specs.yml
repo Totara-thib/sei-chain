@@ -29,15 +29,15 @@ jobs:
       contents: read
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version: '1.27.4'
           cache-dependency-path: go.sum
       - name: Restore ethereum/tests fixtures
-        uses: actions/cache@v4
+        uses: actions/cache@v4.3.0
         with:
           path: integration_test/exec_specs/.cache/ethereum-tests
           key: ethereum-legacy-${{ runner.os }}-${{ hashFiles('integration_test/exec_specs/scripts/install_legacy_tests.sh') }}
@@ -53,7 +53,7 @@ jobs:
       expected_reports: ${{ steps.plan.outputs.expected_reports }}
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
       - name: Build execution-spec matrix
@@ -71,7 +71,7 @@ jobs:
       contents: read
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
       - name: Reclaim runner disk
@@ -84,7 +84,7 @@ jobs:
       - name: Relocate Go caches to /mnt
         run: bash .github/scripts/ci-relocate-go-cache.sh
       - name: Login to Docker Hub
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        uses: docker/login-action@v4.2.0
         if: env.DOCKERHUB_USERNAME != ''
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -92,15 +92,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        uses: docker/login-action@v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
+        uses: docker/setup-buildx-action@v4.1.0
       - name: Build localnode image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v6.19.2
         with:
           context: docker/localnode
           file: docker/localnode/Dockerfile
@@ -112,7 +112,7 @@ jobs:
           cache-from: type=registry,ref=${{ env.GHCR_LOCALNODE }}:cache
           cache-to: type=registry,ref=${{ env.GHCR_LOCALNODE }}:cache,mode=max
       - name: Build rpcnode image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v6.19.2
         with:
           context: docker/rpcnode
           file: docker/rpcnode/Dockerfile
@@ -123,7 +123,7 @@ jobs:
           labels: sei-chain.ci-run-id=${{ github.run_id }}
           cache-from: type=registry,ref=${{ env.GHCR_RPCNODE }}:cache
           cache-to: type=registry,ref=${{ env.GHCR_RPCNODE }}:cache,mode=max
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version: '1.27.4'
       - name: Build seid in localnode image
@@ -141,7 +141,7 @@ jobs:
       - name: Package seid
         run: tar -czf exec-specs-build.tar.gz build/seid
       - name: Upload seid
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: exec-specs-build-${{ github.run_id }}
           path: exec-specs-build.tar.gz
@@ -161,7 +161,7 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
       - name: Reclaim runner disk
@@ -170,25 +170,25 @@ jobs:
         run: bash .github/scripts/ci-free-disk.sh
       - name: Relocate Docker data-root to /mnt
         run: bash .github/scripts/ci-relocate-docker-data-root.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4.4.0
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: integration_test/precompile_tests/package-lock.json
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6.3.0
         id: python
         with:
           python-version: '3.12'
       - name: Install uv
         run: python -m pip install --disable-pip-version-check uv==0.12.5
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        uses: docker/login-action@v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Download seid
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           name: exec-specs-build-${{ github.run_id }}
       - name: Load prebuilt seid and pull Docker images
@@ -207,7 +207,7 @@ jobs:
       - name: Install admin helper dependencies
         run: npm ci --prefix integration_test/precompile_tests
       - name: Restore execution-specs checkout
-        uses: actions/cache@v4
+        uses: actions/cache@v4.3.0
         with:
           path: integration_test/exec_specs/.cache/execution-specs
           key: exec-specs-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('integration_test/exec_specs/scripts/install.sh', 'integration_test/exec_specs/patches/sei-compat.patch') }}
@@ -265,7 +265,7 @@ jobs:
         run: bash integration_test/exec_specs/scripts/run_suite.sh
       - name: Upload execution-spec report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: exec-specs-${{ matrix.artifact }}-${{ github.run_id }}
           path: integration_test/exec_specs/${{ matrix.report }}
@@ -293,11 +293,11 @@ jobs:
     timeout-minutes: 10
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
       - name: Download execution-spec reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           pattern: exec-specs-*-${{ github.run_id }}
           path: integration_test/exec_specs/reports/downloaded

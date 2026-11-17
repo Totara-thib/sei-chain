@@ -69,7 +69,7 @@ jobs:
       tests: ${{ steps.build.outputs.tests }}
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
           sparse-checkout: .github/workflows
@@ -101,7 +101,7 @@ jobs:
       GHCR_RPCNODE: ghcr.io/sei-protocol/sei-chain-integration-test-rpcnode
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
           # CI only builds linux/amd64; leave the darwin/aarch64 wasmvm
@@ -122,7 +122,7 @@ jobs:
         run: bash .github/scripts/ci-relocate-go-cache.sh
       - name: Login to Docker Hub
         # See: https://github.com/docker/login-action/releases/tag/v4.2.0
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        uses: docker/login-action@v4.2.0
         if: env.DOCKERHUB_USERNAME != ''
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -131,16 +131,16 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         # See: https://github.com/docker/login-action/releases/tag/v4.2.0
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        uses: docker/login-action@v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
         # See: https://github.com/docker/setup-buildx-action/releases/tag/v4.1.0
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
+        uses: docker/setup-buildx-action@v4.1.0
       - name: Build localnode image (cached)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v6.19.2
         with:
           context: docker/localnode
           file: docker/localnode/Dockerfile
@@ -154,7 +154,7 @@ jobs:
           labels: sei-chain.ci-run-id=${{ github.run_id }}
           cache-from: type=registry,ref=${{ env.GHCR_LOCALNODE }}:cache
           cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}:cache,mode=max', env.GHCR_LOCALNODE) || '' }}
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version: '1.27.4'
       - name: Build seid and frozen RPC router binaries in localnode container
@@ -169,7 +169,7 @@ jobs:
       - name: Package CI artifacts
         run: tar -czf integration-build.tar.gz build/seid build/frozen-rpc-router
       - name: Upload integration CI artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: integration-ci-artifacts
           path: integration-build.tar.gz
@@ -188,7 +188,7 @@ jobs:
       GHCR_RPCNODE: ghcr.io/sei-protocol/sei-chain-integration-test-rpcnode
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
           sparse-checkout: |
@@ -196,7 +196,7 @@ jobs:
             docker/rpcnode
       - name: Login to Docker Hub
         # See: https://github.com/docker/login-action/releases/tag/v4.2.0
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        uses: docker/login-action@v4.2.0
         if: env.DOCKERHUB_USERNAME != ''
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -205,16 +205,16 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         # See: https://github.com/docker/login-action/releases/tag/v4.2.0
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        uses: docker/login-action@v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
         # See: https://github.com/docker/setup-buildx-action/releases/tag/v4.1.0
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
+        uses: docker/setup-buildx-action@v4.1.0
       - name: Build rpcnode image (cached)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v6.19.2
         with:
           context: docker/rpcnode
           file: docker/rpcnode/Dockerfile
@@ -257,7 +257,7 @@ jobs:
         test: ${{ fromJSON(needs.set-matrix.outputs.tests) }}
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
           sparse-checkout: ${{ env.SPARSE_CHECKOUT }}
@@ -268,7 +268,7 @@ jobs:
         run: bash .github/scripts/ci-relocate-docker-data-root.sh
       - name: Relocate Go caches to /mnt
         run: bash .github/scripts/ci-relocate-go-cache.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4.4.0
         with:
           node-version: '22'
           cache: npm
@@ -282,18 +282,18 @@ jobs:
         run: command -v jq >/dev/null || sudo apt-get install -y jq
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v7.1.0
         with:
           go-version: '1.27.4'
       - name: Login to GitHub Container Registry
         # See: https://github.com/docker/login-action/releases/tag/v4.2.0
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        uses: docker/login-action@v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Download integration CI artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           name: integration-ci-artifacts
       - name: Load prebuilt seid and pull Docker images
@@ -404,7 +404,7 @@ jobs:
 
       - name: Upload logs directory
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: integration-logs-${{ steps.log_artifact_meta.outputs.artifact_name }}
           path: artifacts/sei-${{ steps.log_artifact_meta.outputs.artifact_name }}
@@ -412,7 +412,7 @@ jobs:
 
       - name: Upload RPC parity test report
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: rpc-parity-report-${{ steps.log_artifact_meta.outputs.artifact_name }}
           path: integration_test/rpc_tests/reports/merged
@@ -420,7 +420,7 @@ jobs:
 
       - name: Upload precompile test report
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: precompile-report-${{ steps.log_artifact_meta.outputs.artifact_name }}
           path: integration_test/precompile_tests/reports/merged
@@ -443,7 +443,7 @@ jobs:
       GHCR_RPCNODE: ghcr.io/sei-protocol/sei-chain-integration-test-rpcnode
     steps:
       # See: https://github.com/actions/checkout/releases/tag/v7.0.0
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
           sparse-checkout: ${{ env.SPARSE_CHECKOUT }}
@@ -454,13 +454,13 @@ jobs:
         run: bash .github/scripts/ci-relocate-docker-data-root.sh
       - name: Relocate Go caches to /mnt
         run: bash .github/scripts/ci-relocate-go-cache.sh
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version: '1.27.4'
       - name: Install jq
         run: command -v jq >/dev/null || sudo apt-get install -y jq
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v3.7.0
         if: env.DOCKERHUB_USERNAME != ''
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -468,13 +468,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Download integration CI artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           name: integration-ci-artifacts
       - name: Load prebuilt seid and pull Docker images
@@ -514,7 +514,7 @@ jobs:
           fi
       - name: Upload logs directory
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: integration-logs-autobahn-integration
           path: artifacts/sei-autobahn-integration
