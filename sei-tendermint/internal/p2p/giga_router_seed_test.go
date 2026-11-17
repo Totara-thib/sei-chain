@@ -182,7 +182,7 @@ func TestSeedRefusesAStateItCannotTrust(t *testing.T) {
 				s.restore(t, s.proof(t, s.key, seedRoad, seedAppHash), seedAppHash)
 				require.NoError(t, os.Remove(RestoreStateSyncProofFile(s.cfg.PersistentStateDir)))
 			},
-			wantMsg: "run restore again",
+			wantMsg: "run seid statesync import again",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

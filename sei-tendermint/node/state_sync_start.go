@@ -45,7 +45,7 @@ func readStateSyncStart(conf *config.Config, giga gigaconfig.Config, genDoc *typ
 		return p2p.StateSyncStart{}, fmt.Errorf("this home was restored by giga state sync and must start once as a fullnode, which removes %s", marker)
 	}
 	if err := requireRestoreInstalled(storageConfig, road); err != nil {
-		return p2p.StateSyncStart{}, fmt.Errorf("the restore of %d on this home is incomplete, run restore again: %w", road, err)
+		return p2p.StateSyncStart{}, fmt.Errorf("the restore of %d on this home is incomplete, run seid statesync import again: %w", road, err)
 	}
 	start.Restored = restored
 	return start, nil

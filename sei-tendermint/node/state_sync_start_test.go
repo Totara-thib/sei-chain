@@ -74,7 +74,7 @@ func TestReadStateSyncStartRefusesAMarkedHomeItCannotSeed(t *testing.T) {
 		{
 			name:    "FlatKV is not installed",
 			setup:   func(t *testing.T, s *stateSyncStartTest) { s.mark(t, 10, true) },
-			wantMsg: "the restore of 10 on this home is incomplete, run restore again: FlatKV is at 0",
+			wantMsg: "the restore of 10 on this home is incomplete, run seid statesync import again: FlatKV is at 0",
 		},
 		{
 			name: "the marker does not hold a height",

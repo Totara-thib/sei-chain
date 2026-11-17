@@ -90,7 +90,7 @@ func writeSeedRecords(
 	path := RestoreStateSyncProofFile(cfg.PersistentStateDir)
 	data, err := os.ReadFile(path) //nolint:gosec // path is the proof file under the node's own state dir.
 	if err != nil {
-		return fmt.Errorf("read the state sync proof file; run restore again: %w", err)
+		return fmt.Errorf("read the state sync proof file; run seid statesync import again: %w", err)
 	}
 	proof, appHash, err := VerifyStateSyncProof(registry, data, road)
 	if err != nil {
@@ -153,7 +153,7 @@ func requireRestoreAnchor(ctx context.Context, appHashBuilder builder.AppHashBui
 		return fmt.Errorf("read the restore anchor of road %d: %w", road, err)
 	}
 	if got := entry.AppHash(); got != appHash {
-		return fmt.Errorf("the app-hash vault holds %x for road %d, but the AppQC of the state sync proof file signs %x; run restore again", got, road, appHash)
+		return fmt.Errorf("the app-hash vault holds %x for road %d, but the AppQC of the state sync proof file signs %x; run seid statesync import again", got, road, appHash)
 	}
 	return nil
 }
