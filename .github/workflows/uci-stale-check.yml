@@ -19,6 +19,6 @@ jobs:
     permissions:
       issues: write
       pull-requests: write
-    uses: sei-protocol/uci/.github/workflows/stale-check.yml@v0.0.9
+    uses: sei-protocol/uci/.github/workflows/stale-check.yml@5acbd8eef65336b0619b46de3bfddfe84841a7fb # v0.0.9
     with: 
       days-before-pr-stale: 28

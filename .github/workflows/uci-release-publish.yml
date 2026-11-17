@@ -24,7 +24,7 @@ concurrency:
 jobs:
   publish:
     name: Release
-    uses: sei-protocol/uci/.github/workflows/release-publish.yml@v0.0.11
+    uses: sei-protocol/uci/.github/workflows/release-publish.yml@fc2a5badfa64a5a500346ae3bc3947fc44ecb485 # v0.0.11
 
   goreleaser:
     name: GoReleaser
@@ -37,7 +37,7 @@ jobs:
     if: >-
       needs.publish.outputs.release_created == 'true' ||
       (github.ref_type == 'tag' && startsWith(github.ref_name, 'v'))
-    uses: sei-protocol/uci/.github/workflows/goreleaser-release.yml@v0.0.11
+    uses: sei-protocol/uci/.github/workflows/goreleaser-release.yml@fc2a5badfa64a5a500346ae3bc3947fc44ecb485 # v0.0.11
     with:
       ref: ${{ github.ref_type == 'tag' && github.ref_name || needs.publish.outputs.version }}
       go-version: '1.27.4'
