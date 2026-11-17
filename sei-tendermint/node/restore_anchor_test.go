@@ -70,6 +70,15 @@ func proofGenesis(keys []atypes.SecretKey) EpochGenesis {
 	return EpochGenesis{GenDoc: &types.GenesisDoc{ChainID: "chain-a", InitialHeight: 1}, Validators: validators}
 }
 
+// genesisCheckpointEpochs returns the epochs at height of a checkpoint with no epoch_registry row
+// on the chain that genesis starts.
+func genesisCheckpointEpochs(t *testing.T, genesis EpochGenesis, height int64) CheckpointEpochs {
+	t.Helper()
+	epochs, err := OpenCheckpointEpochs(genesis, committedCheckpoint(t, utils.None[[]byte]()), height)
+	require.NoError(t, err)
+	return epochs
+}
+
 func TestVerifyStateSyncProofReturnsTheSignedAppHash(t *testing.T) {
 	rng := utils.TestRng()
 	keys := utils.GenSliceN(rng, 3, atypes.GenSecretKey)
@@ -78,7 +87,7 @@ func TestVerifyStateSyncProofReturnsTheSignedAppHash(t *testing.T) {
 	proof, err := StateSyncProofForTesting(genesis, keys, 12, appHash[:], t.TempDir())
 	require.NoError(t, err)
 
-	got, err := VerifyStateSyncProof(genesis, t.TempDir(), 12, proof)
+	got, err := VerifyStateSyncProof(genesisCheckpointEpochs(t, genesis, 12), 12, proof)
 	require.NoError(t, err)
 	require.Equal(t, appHash, got)
 }
@@ -90,7 +99,7 @@ func TestVerifyStateSyncProofRefusesAProofOfAnotherCommittee(t *testing.T) {
 	proof, err := StateSyncProofForTesting(proofGenesis(others), others, 12, make(atypes.AppHash, 32), t.TempDir())
 	require.NoError(t, err)
 
-	_, err = VerifyStateSyncProof(proofGenesis(keys), t.TempDir(), 12, proof)
+	_, err = VerifyStateSyncProof(genesisCheckpointEpochs(t, proofGenesis(keys), 12), 12, proof)
 	require.Error(t, err)
 }
 
@@ -101,7 +110,7 @@ func TestVerifyStateSyncProofRefusesAProofOfAnotherHeight(t *testing.T) {
 	proof, err := StateSyncProofForTesting(genesis, keys, 12, make(atypes.AppHash, 32), t.TempDir())
 	require.NoError(t, err)
 
-	_, err = VerifyStateSyncProof(genesis, t.TempDir(), 13, proof)
+	_, err = VerifyStateSyncProof(genesisCheckpointEpochs(t, genesis, 12), 13, proof)
 	require.Error(t, err)
 }
 
@@ -112,6 +121,6 @@ func TestVerifyStateSyncProofRefusesAnAppHashThatIsNot32Bytes(t *testing.T) {
 	proof, err := StateSyncProofForTesting(genesis, keys, 12, atypes.AppHash{1, 2, 3}, t.TempDir())
 	require.NoError(t, err)
 
-	_, err = VerifyStateSyncProof(genesis, t.TempDir(), 12, proof)
+	_, err = VerifyStateSyncProof(genesisCheckpointEpochs(t, genesis, 12), 12, proof)
 	require.Error(t, err)
 }
