@@ -1,4 +1,4 @@
-package statesyncsnapshot
+package statesync
 
 import (
 	"bytes"
@@ -14,34 +14,34 @@ import (
 	"github.com/sei-protocol/sei-chain/sei-tendermint/node"
 )
 
-func TestCreateRestoreRoundTrip(t *testing.T) {
+func TestExportImportRoundTrip(t *testing.T) {
 	p := newProducer(t, 2)
 	p.commit(t, 1)
 	h := p.commit(t, 2)
 
 	t.Run("through files", func(t *testing.T) {
-		archive, got := p.createArchive(t)
+		archive, got := p.exportArchive(t)
 		require.Equal(t, h, got)
 		dst := freshHome(t)
 		var stderr bytes.Buffer
-		require.NoError(t, runRestore(t.Context(), dst, archive, nil, &stderr))
+		require.NoError(t, runImport(t.Context(), dst, archive, nil, &stderr))
 		require.Equal(t, h, heightLine(t, stderr.String()))
 		requireRestored(t, dst, p, h)
 	})
 	t.Run("through stdout and stdin", func(t *testing.T) {
-		var archive, createErr bytes.Buffer
-		require.NoError(t, runCreate(t.Context(), p.target, createOptions{out: "-"}, &archive, &createErr))
-		require.Equal(t, h, heightLine(t, createErr.String()))
+		var archive, exportErr bytes.Buffer
+		require.NoError(t, runExport(t.Context(), p.target, exportOptions{out: "-"}, &archive, &exportErr))
+		require.Equal(t, h, heightLine(t, exportErr.String()))
 		dst := freshHome(t)
-		require.NoError(t, runRestore(t.Context(), dst, "-", &archive, &bytes.Buffer{}))
+		require.NoError(t, runImport(t.Context(), dst, "-", &archive, &bytes.Buffer{}))
 		requireRestored(t, dst, p, h)
 	})
 }
 
-func TestRestoreRefusals(t *testing.T) {
+func TestImportRefusals(t *testing.T) {
 	p := newProducer(t, 2)
 	p.commit(t, 1)
-	archive, _ := p.createArchive(t)
+	archive, _ := p.exportArchive(t)
 	data, err := os.ReadFile(archive) //nolint:gosec // test path.
 	require.NoError(t, err)
 	truncated := filepath.Join(t.TempDir(), "truncated.tar.zst")
@@ -112,10 +112,10 @@ func TestRestoreRefusals(t *testing.T) {
 				from = tc.from
 			}
 			before := treeOf(t, tg.layout.PersistentStateDir)
-			err := runRestore(t.Context(), tg, from, nil, &bytes.Buffer{})
+			err := runImport(t.Context(), tg, from, nil, &bytes.Buffer{})
 			require.Error(t, err)
 			require.ErrorContains(t, err, tc.wantErr(tg.layout))
-			require.Equal(t, before, treeOf(t, tg.layout.PersistentStateDir), "restore changed the home")
+			require.Equal(t, before, treeOf(t, tg.layout.PersistentStateDir), "import changed the home")
 		})
 	}
 
@@ -123,30 +123,30 @@ func TestRestoreRefusals(t *testing.T) {
 		tg := freshHome(t)
 		s := openStore(t, tg.layout.FlatKVDir, 2)
 		defer func() { require.NoError(t, s.Close()) }()
-		err := runRestore(t.Context(), tg, archive, nil, &bytes.Buffer{})
+		err := runImport(t.Context(), tg, archive, nil, &bytes.Buffer{})
 		require.ErrorContains(t, err, "is a node running on this home")
 		require.NoFileExists(t, tg.layout.RestoreMarkerFile)
 	})
 }
 
-func TestRestoreReplacesAnEarlierRestoreThatHasNotSeeded(t *testing.T) {
+func TestImportReplacesAnEarlierImportThatHasNotSeeded(t *testing.T) {
 	p := newProducer(t, 2)
 	h1 := p.commit(t, 1)
-	first, _ := p.createArchive(t)
+	first, _ := p.exportArchive(t)
 	p.commit(t, 2)
 	h2 := p.commit(t, 3)
-	second, _ := p.createArchive(t)
+	second, _ := p.exportArchive(t)
 
 	dst := freshHome(t)
-	require.NoError(t, runRestore(t.Context(), dst, first, nil, &bytes.Buffer{}))
+	require.NoError(t, runImport(t.Context(), dst, first, nil, &bytes.Buffer{}))
 	requireRestored(t, dst, p, h1)
-	require.NoError(t, runRestore(t.Context(), dst, second, nil, &bytes.Buffer{}))
+	require.NoError(t, runImport(t.Context(), dst, second, nil, &bytes.Buffer{}))
 	requireRestored(t, dst, p, h2)
-	require.NoError(t, runRestore(t.Context(), dst, second, nil, &bytes.Buffer{}), "a rerun of a finished restore")
+	require.NoError(t, runImport(t.Context(), dst, second, nil, &bytes.Buffer{}), "a rerun of a finished import")
 	requireRestored(t, dst, p, h2)
 }
 
-func TestRestoreRefusesAnArchiveThatFailsItsChecks(t *testing.T) {
+func TestImportRefusesAnArchiveThatFailsItsChecks(t *testing.T) {
 	p := newProducer(t, 2)
 	h := p.commit(t, 1)
 	p.closeStore(t)
@@ -224,10 +224,10 @@ func TestRestoreRefusesAnArchiveThatFailsItsChecks(t *testing.T) {
 			archive := p.archiveWithChange(t, h, func(m *manifest, entries *[]tarEntry) { tc.change(t, m, entries) })
 			tg := freshHome(t)
 			before := treeOf(t, tg.layout.PersistentStateDir)
-			err := runRestore(t.Context(), tg, archive, nil, &bytes.Buffer{})
+			err := runImport(t.Context(), tg, archive, nil, &bytes.Buffer{})
 			require.Error(t, err)
 			require.ErrorContains(t, err, tc.wantMsg)
-			require.Equal(t, before, treeOf(t, tg.layout.PersistentStateDir), "restore changed the home")
+			require.Equal(t, before, treeOf(t, tg.layout.PersistentStateDir), "import changed the home")
 		})
 	}
 
@@ -235,7 +235,7 @@ func TestRestoreRefusesAnArchiveThatFailsItsChecks(t *testing.T) {
 		archive := p.archiveWithChange(t, h, nil)
 		tg := freshHome(t)
 		var stderr bytes.Buffer
-		require.NoError(t, runRestore(t.Context(), tg, archive, nil, &stderr))
+		require.NoError(t, runImport(t.Context(), tg, archive, nil, &stderr))
 		require.Contains(t, stderr.String(), "FlatKV import complete")
 		requireRestored(t, tg, p, h)
 	})

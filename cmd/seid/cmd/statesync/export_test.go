@@ -1,4 +1,4 @@
-package statesyncsnapshot
+package statesync
 
 import (
 	"bytes"
@@ -24,20 +24,20 @@ func readManifest(t *testing.T, archive string) *manifest {
 	return m
 }
 
-func TestCreatePacksTheCurrentCheckpointAndLeavesNoStagingFiles(t *testing.T) {
+func TestExportPacksTheCurrentCheckpointAndLeavesNoStagingFiles(t *testing.T) {
 	p := newProducer(t, 2)
 	p.commit(t, 1)
 	h := p.commit(t, 2)
 	p.closeStore(t)
 
-	stagingRoot := filepath.Join(p.layout.PersistentStateDir, createStagingDirName)
-	require.NoError(t, os.MkdirAll(filepath.Join(stagingRoot, "create-old"), 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(stagingRoot, "create-old", "x"), []byte("x"), 0o600))
+	stagingRoot := filepath.Join(p.layout.PersistentStateDir, exportStagingDirName)
+	require.NoError(t, os.MkdirAll(filepath.Join(stagingRoot, "export-old"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(stagingRoot, "export-old", "x"), []byte("x"), 0o600))
 	out := filepath.Join(t.TempDir(), "archive.tar.zst")
 	require.NoError(t, os.WriteFile(out+".partial", []byte("stale"), 0o600))
 
 	var stderr bytes.Buffer
-	require.NoError(t, runCreate(t.Context(), p.target, createOptions{out: out}, nil, &stderr))
+	require.NoError(t, runExport(t.Context(), p.target, exportOptions{out: out}, nil, &stderr))
 	require.Equal(t, h, heightLine(t, stderr.String()))
 	require.NoDirExists(t, stagingRoot)
 	require.NoFileExists(t, out+".partial")
@@ -59,48 +59,48 @@ func TestCreatePacksTheCurrentCheckpointAndLeavesNoStagingFiles(t *testing.T) {
 	require.Equal(t, p.proofs[h], proof)
 }
 
-func TestCreatePacksTheNewestCheckpointWithAStateSyncProofFile(t *testing.T) {
+func TestExportPacksTheNewestCheckpointWithAStateSyncProofFile(t *testing.T) {
 	p := newProducer(t, 2)
 	p.commit(t, 1)
 	h := p.commit(t, 2)
 	require.NoError(t, os.Remove(proofFile(p.layout, p.commit(t, 3))))
 
-	archive, got := p.createArchive(t)
+	archive, got := p.exportArchive(t)
 	require.Equal(t, h, got)
 	dst := freshHome(t)
-	require.NoError(t, runRestore(t.Context(), dst, archive, nil, &bytes.Buffer{}))
+	require.NoError(t, runImport(t.Context(), dst, archive, nil, &bytes.Buffer{}))
 	requireRestored(t, dst, p, h)
 }
 
-func TestCreateWithoutAStateSyncProofFileFails(t *testing.T) {
+func TestExportWithoutAStateSyncProofFileFails(t *testing.T) {
 	p := newProducer(t, 2)
 	h := p.commit(t, 1)
 	require.NoError(t, os.Remove(proofFile(p.layout, h)))
 
 	for _, height := range []int64{0, h} {
 		var stdout bytes.Buffer
-		err := runCreate(t.Context(), p.target, createOptions{out: "-", height: height}, &stdout, &bytes.Buffer{})
+		err := runExport(t.Context(), p.target, exportOptions{out: "-", height: height}, &stdout, &bytes.Buffer{})
 		require.ErrorIs(t, err, errNoProofFile)
 		require.Zero(t, stdout.Len())
 	}
 }
 
-func TestCreateRefusesAStateSyncProofFileOfAnotherHeight(t *testing.T) {
+func TestExportRefusesAStateSyncProofFileOfAnotherHeight(t *testing.T) {
 	p := newProducer(t, 2)
 	h := p.commit(t, 1)
 	require.NoError(t, os.WriteFile(proofFile(p.layout, h), stateSyncProofAt(t, h+1), 0o600))
 
 	var stdout bytes.Buffer
-	require.Error(t, runCreate(t.Context(), p.target, createOptions{out: "-"}, &stdout, &bytes.Buffer{}))
+	require.Error(t, runExport(t.Context(), p.target, exportOptions{out: "-"}, &stdout, &bytes.Buffer{}))
 	require.Zero(t, stdout.Len())
 }
 
-func TestCreateToStdoutPrintsOneHeightLine(t *testing.T) {
+func TestExportToStdoutPrintsOneHeightLine(t *testing.T) {
 	p := newProducer(t, 2)
 	h := p.commit(t, 1)
 
 	var archive, stderr bytes.Buffer
-	require.NoError(t, runCreate(t.Context(), p.target, createOptions{out: "-"}, &archive, &stderr))
+	require.NoError(t, runExport(t.Context(), p.target, exportOptions{out: "-"}, &archive, &stderr))
 	require.Equal(t, h, heightLine(t, stderr.String()))
 	a, m, err := openArchive(t.Context(), &archive)
 	require.NoError(t, err)
@@ -108,74 +108,74 @@ func TestCreateToStdoutPrintsOneHeightLine(t *testing.T) {
 	require.Equal(t, h, m.CheckpointHeight)
 }
 
-func TestCreateFailsWhileAnotherCreateRuns(t *testing.T) {
+func TestExportFailsWhileAnotherExportRuns(t *testing.T) {
 	p := newProducer(t, 2)
 	p.commit(t, 1)
 
-	unlock, err := lockCreate(p.layout.PersistentStateDir)
+	unlock, err := lockExport(p.layout.PersistentStateDir)
 	require.NoError(t, err)
-	err = runCreate(t.Context(), p.target, createOptions{out: "-"}, &bytes.Buffer{}, &bytes.Buffer{})
-	require.ErrorIs(t, err, errCreateRunning)
+	err = runExport(t.Context(), p.target, exportOptions{out: "-"}, &bytes.Buffer{}, &bytes.Buffer{})
+	require.ErrorIs(t, err, errExportRunning)
 	unlock()
-	require.NoError(t, runCreate(t.Context(), p.target, createOptions{out: "-"}, &bytes.Buffer{}, &bytes.Buffer{}))
+	require.NoError(t, runExport(t.Context(), p.target, exportOptions{out: "-"}, &bytes.Buffer{}, &bytes.Buffer{}))
 }
 
-func TestCreateFailsWhileAnotherCreateWritesToTheSameDir(t *testing.T) {
+func TestExportFailsWhileAnotherExportWritesToTheSameDir(t *testing.T) {
 	p := newProducer(t, 2)
 	p.commit(t, 1)
 	outDir := t.TempDir()
 	out := filepath.Join(outDir, "archive.tar.zst")
 	partial := out + ".partial"
-	require.NoError(t, os.WriteFile(partial, []byte("another create"), 0o600))
+	require.NoError(t, os.WriteFile(partial, []byte("another export"), 0o600))
 
-	unlock, err := lockCreate(outDir)
+	unlock, err := lockExport(outDir)
 	require.NoError(t, err)
-	opts := createOptions{out: out, stagingParent: t.TempDir()}
-	err = runCreate(t.Context(), p.target, opts, nil, &bytes.Buffer{})
-	require.ErrorIs(t, err, errCreateRunning)
+	opts := exportOptions{out: out, stagingParent: t.TempDir()}
+	err = runExport(t.Context(), p.target, opts, nil, &bytes.Buffer{})
+	require.ErrorIs(t, err, errExportRunning)
 	require.FileExists(t, partial)
 	unlock()
-	require.NoError(t, runCreate(t.Context(), p.target, opts, nil, &bytes.Buffer{}))
+	require.NoError(t, runExport(t.Context(), p.target, opts, nil, &bytes.Buffer{}))
 	require.NoFileExists(t, partial)
 }
 
-func TestCreateWritesIntoItsStagingParent(t *testing.T) {
+func TestExportWritesIntoItsStagingParent(t *testing.T) {
 	p := newProducer(t, 2)
 	h := p.commit(t, 1)
 	out := filepath.Join(p.layout.PersistentStateDir, "archive.tar.zst")
 
-	require.NoError(t, runCreate(t.Context(), p.target, createOptions{out: out}, nil, &bytes.Buffer{}))
+	require.NoError(t, runExport(t.Context(), p.target, exportOptions{out: out}, nil, &bytes.Buffer{}))
 	require.Equal(t, h, readManifest(t, out).CheckpointHeight)
 }
 
-func TestCreateLinksSurvivePruningWhileItPacks(t *testing.T) {
+func TestExportLinksSurvivePruningWhileItPacks(t *testing.T) {
 	p := newProducer(t, 0)
 	h := p.commit(t, 1)
 	out := filepath.Join(t.TempDir(), "archive.tar.zst")
 
 	pruneBeforeWrite := func(step string) error {
-		if step == createStepManifest {
+		if step == exportStepManifest {
 			p.commit(t, 2)
 			p.commit(t, 3)
 			require.NoDirExists(t, filepath.Join(p.layout.FlatKVDir, flatkv.SnapshotDirName(h)))
 		}
 		return nil
 	}
-	require.NoError(t, createWith(t.Context(), p.target, createOptions{out: out}, nil, &bytes.Buffer{}, pruneBeforeWrite))
+	require.NoError(t, exportWith(t.Context(), p.target, exportOptions{out: out}, nil, &bytes.Buffer{}, pruneBeforeWrite))
 
 	dst := freshHome(t)
-	require.NoError(t, runRestore(t.Context(), dst, out, nil, &bytes.Buffer{}))
+	require.NoError(t, runImport(t.Context(), dst, out, nil, &bytes.Buffer{}))
 	s := openStore(t, dst.layout.FlatKVDir, 2)
 	defer func() { require.NoError(t, s.Close()) }()
 	require.Equal(t, h, s.Version())
 }
 
-func TestCreateWithAPrunedHeightFails(t *testing.T) {
+func TestExportWithAPrunedHeightFails(t *testing.T) {
 	p := newProducer(t, 0)
 	h := p.commit(t, 1)
 	p.commit(t, 2)
 
-	err := runCreate(t.Context(), p.target, createOptions{out: "-", height: h}, &bytes.Buffer{}, &bytes.Buffer{})
+	err := runExport(t.Context(), p.target, exportOptions{out: "-", height: h}, &bytes.Buffer{}, &bytes.Buffer{})
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 

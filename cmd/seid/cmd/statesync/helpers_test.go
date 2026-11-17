@@ -1,4 +1,4 @@
-package statesyncsnapshot
+package statesync
 
 import (
 	"bytes"
@@ -242,12 +242,12 @@ func appendLogicalRow(entries []tarEntry, key, value []byte) []tarEntry {
 	return entries
 }
 
-// createArchive packs the producer's current checkpoint into a file and returns its path and height.
-func (p *producer) createArchive(t *testing.T) (string, int64) {
+// exportArchive packs the producer's current checkpoint into a file and returns its path and height.
+func (p *producer) exportArchive(t *testing.T) (string, int64) {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "archive.tar.zst")
 	var stderr bytes.Buffer
-	require.NoError(t, runCreate(t.Context(), p.target, createOptions{out: out}, nil, &stderr))
+	require.NoError(t, runExport(t.Context(), p.target, exportOptions{out: out}, nil, &stderr))
 	return out, heightLine(t, stderr.String())
 }
 
@@ -271,7 +271,7 @@ func openStore(t *testing.T, dir string, keepRecent uint32) *flatkv.CommitStore 
 func requireRestored(t *testing.T, tg target, p *producer, height int64) {
 	t.Helper()
 	requireMarker(t, tg, utils.Some(height))
-	require.NoDirExists(t, filepath.Join(tg.layout.PersistentStateDir, restoreStagingDirName))
+	require.NoDirExists(t, filepath.Join(tg.layout.PersistentStateDir, importStagingDirName))
 	proof, err := os.ReadFile(tg.layout.RestoreProofFile)
 	require.NoError(t, err)
 	require.Equal(t, p.proofs[height], proof)
